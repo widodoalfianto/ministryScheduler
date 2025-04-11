@@ -18,6 +18,13 @@
 var databaseFileId = "1cTlyG3m3i3OYZU7X2LYPJ03TUMKkFVakSIbhhVVH1mE"; // Database file ID
 var ministrySheetName = "Ministry Members"; // Sheet name for ministry members
 
+var formNameHeader = 'Select your name';
+var formTimesHeader = 'How many times are you willing to serve this month';
+var formDatesHeader = 'Which days are you NOT available?';
+var formCommentsHeader = 'Comments(optional)';
+
+var availabilitySheetIndex = 13;
+
 function onFormSubmit(e) {
   updateDatabase(e);
 }
@@ -33,11 +40,11 @@ function updateDatabase(e) {
 
     // Extract form responses using namedValues
     var responses = e.namedValues;
-    var name = responses['Select Your Name'];
+    var name = responses[formNameHeader];
     // var roles = responses['Select Your Roles'];
-    var timesWilling = responses['Number of Times Willing to Serve'];
-    var unavailableDates = responses['Which Sundays are you NOT available?'];
-    var comments = responses['Comments(optional)'];
+    var timesWilling = responses[formTimesHeader];
+    var unavailableDates = responses[formDatesHeader];
+    var comments = responses[formCommentsHeader];
 
     // Log extracted values for debugging
     Logger.log('Name: ' + name);
@@ -99,16 +106,16 @@ function getFormResponses() {
       var answer = itemResponse.getResponse();
 
       switch (title) {
-        case 'Select Your Name':
+        case formNameHeader:
           responseData.name = answer;
           break;
         // case 'Select Your Roles':
         //   responseData.roles = Array.isArray(answer) ? answer : [answer];
         //   break;
-        case 'Number of Times Willing to Serve':
+        case formTimesHeader:
           responseData.times = answer;
           break;
-        case 'Which Sundays are you NOT available?':
+        case formDatesHeader:
           responseData.unavailableDates = Array.isArray(answer) ? answer : [answer];
           break;
       }
@@ -178,7 +185,7 @@ function createNewFormForMonth(month, year, monthName) {
   var form = FormApp.create(formTitle);
 
   // Name Dropdown (ListItem)
-  var nameDropdown = form.addListItem().setTitle("Select Your Name").setRequired(true);
+  var nameDropdown = form.addListItem().setTitle(formNameHeader).setRequired(true);
   nameDropdown.setChoiceValues(["Loading..."]);
 
   // const rolesMC = form.addCheckboxItem();
@@ -195,7 +202,7 @@ function createNewFormForMonth(month, year, monthName) {
   // Number of Times Willing to Serve
   // form.addTextItem().setTitle("Number of Times Willing to Serve").setRequired(true);
   var numDropdown = form.addListItem()
-  .setTitle("Number of Times You Are Willing to Serve")
+  .setTitle(formTimesHeader)
   .setChoiceValues(['1', '2', '3', '4', '5']) // Set the dropdown options
   .setRequired(true); // Make the question required
   
@@ -216,11 +223,11 @@ function createNewFormForMonth(month, year, monthName) {
   });
 
   const availMC = form.addCheckboxItem();
-  availMC.setTitle("Which Sundays are you NOT available?")
+  availMC.setTitle(formDatesHeader)
     .setChoices(dateChoices.map(date => availMC.createChoice(date)));
 
   // Optional comments section
-  form.addTextItem().setTitle("Comments(optional)").setRequired(false);
+  form.addTextItem().setTitle(formCommentsHeader).setRequired(false);
 
   // Link the form responses to a new sheet in the current spreadsheet
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());  // Link the form to the new response sheet
@@ -267,7 +274,7 @@ function updateFormDropdown() {
 
   // Locate the dropdown question by its title
   var items = form.getItems(FormApp.ItemType.LIST);
-  var dropdownTitle = "Select Your Name"; // Adjust this to match your question title
+  var dropdownTitle = formNameHeader; // Adjust this to match your question title
   var dropdownItem = null;
 
   for (var i = 0; i < items.length; i++) {
