@@ -15,8 +15,6 @@
  * 
  */
 
-
-// TODO: Re-factor and clean
 var databaseFileId = "1cTlyG3m3i3OYZU7X2LYPJ03TUMKkFVakSIbhhVVH1mE"; // Database file ID
 var ministrySheetName = "Ministry Members"; // Sheet name for ministry members
 
@@ -39,12 +37,14 @@ function updateDatabase(e) {
     // var roles = responses['Select Your Roles'];
     var timesWilling = responses['Number of Times Willing to Serve'];
     var unavailableDates = responses['Which Sundays are you NOT available?'];
+    var comments = responses['Comments(optional)'];
 
     // Log extracted values for debugging
     Logger.log('Name: ' + name);
     // Logger.log('Roles: ' + roles);
     Logger.log('Times Willing to Serve: ' + timesWilling);
     Logger.log('Unavailable Dates: ' + unavailableDates);
+    Logger.log('Comments: ') + comments;
 
     var found = false;
     for (var i = 1; i < databaseData.length; i++) {
@@ -53,6 +53,7 @@ function updateDatabase(e) {
         // databaseSheet.getRange(i + 1, 2).setValue(roles);
         databaseSheet.getRange(i + 1, 3).setValue(timesWilling);
         databaseSheet.getRange(i + 1, 4).setValue(unavailableDates);
+        databaseSheet.getRange(i + 1, 5).setValue(comments);
         found = true;
         break;
       }
@@ -65,6 +66,7 @@ function updateDatabase(e) {
       // databaseSheet.getRange(lastRow, 2).setValue(roles);
       databaseSheet.getRange(lastRow, 3).setValue(timesWilling);
       databaseSheet.getRange(lastRow, 4).setValue(unavailableDatesString);
+      databaseSheet.getRange(lastRow, 5).setValue(comments);
     }
   } catch (error) {
     Logger.log('Error in updateDatabase: ' + error.message);
@@ -143,6 +145,30 @@ function getSundaysOfMonth(year, month) {
   return sundays;
 }
 
+function testForm() {
+  var today = new Date();
+
+  var planDate = new Date(today);
+  planDate.setMonth(today.getMonth() + 1);
+
+  var oldDate = new Date(today);
+  oldDate.setMonth(today.getMonth() - 1);
+
+  var todayMonthName = today.toLocaleString('default', { month: 'long' });
+  var todayMonth = today.getMonth();
+  var todayYear = today.getFullYear();
+
+  var planMonthName = planDate.toLocaleString('default', { month: 'long' });
+  var planMonth = planDate.getMonth();
+  var planYear = planDate.getFullYear();
+
+  var oldMonthName = oldDate.toLocaleString('default', { month: 'long' });
+  var oldMonth = oldDate.getMonth();
+  var oldYear = oldDate.getFullYear();
+
+  createNewFormForMonth(planMonth, planYear, planMonthName);
+}
+
 function createNewFormForMonth(month, year, monthName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var metadataSheet = ss.getSheetByName("Form Metadata") || ss.insertSheet("Form Metadata");
@@ -152,7 +178,7 @@ function createNewFormForMonth(month, year, monthName) {
   var form = FormApp.create(formTitle);
 
   // Name Dropdown (ListItem)
-  var nameDropdown = form.addListItem().setTitle("Select Your Name");
+  var nameDropdown = form.addListItem().setTitle("Select Your Name").setRequired(true);
   nameDropdown.setChoiceValues(["Loading..."]);
 
   // const rolesMC = form.addCheckboxItem();
@@ -192,6 +218,9 @@ function createNewFormForMonth(month, year, monthName) {
   const availMC = form.addCheckboxItem();
   availMC.setTitle("Which Sundays are you NOT available?")
     .setChoices(dateChoices.map(date => availMC.createChoice(date)));
+
+  // Optional comments section
+  form.addTextItem().setTitle("Comments(optional)").setRequired(false);
 
   // Link the form responses to a new sheet in the current spreadsheet
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());  // Link the form to the new response sheet
