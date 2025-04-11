@@ -19,11 +19,15 @@ var databaseFileId = "1cTlyG3m3i3OYZU7X2LYPJ03TUMKkFVakSIbhhVVH1mE"; // Database
 var ministrySheetName = "Ministry Members"; // Sheet name for ministry members
 
 var formNameHeader = 'Select your name';
-var formTimesHeader = 'How many times are you willing to serve this month';
+var formTimesHeader = 'How many times are you willing to serve this month?';
 var formDatesHeader = 'Which days are you NOT available?';
 var formCommentsHeader = 'Comments(optional)';
 
-var availabilitySheetIndex = 13;
+var sheetsNameHeader = 'Name';
+var sheetsRolesHeader = 'Roles';
+var sheetsTimesHeader = 'Times Willing to Serve';
+var sheetsDatesHeader = 'Unavailable Dates';
+var sheetsCommentsHeader = 'Comments';
 
 function onFormSubmit(e) {
   updateDatabase(e);
@@ -127,29 +131,28 @@ function getFormResponses() {
   return result;
 }
 
-function getSundaysOfMonth(year, month) {
-  var sundays = [];
+function getServiceDates(year, month) {
+  var serviceDates = [];
   
-  // Validate that month is within 0-11 range
-  if (month < 0 || month > 11) {
-    Logger.log("Invalid month: " + month + ". It should be between 0 and 11.");
-    return [];  // Return empty array if invalid month is provided
+  // Get the first day of the month
+  var firstDay = new Date(year, month, 1);
+  
+  // Find the first Friday of the month
+  var firstFriday = new Date(firstDay);
+  while (firstFriday.getDay() !== 5) { // 5 represents Friday
+    firstFriday.setDate(firstFriday.getDate() + 1);
   }
+  serviceDates.push(Utilities.formatDate(firstFriday, Session.getScriptTimeZone(), 'MM/dd') + ' - Corporate Prayer');
   
-  var date = new Date(year, month, 1);
-  
-  // Ensure the date is valid
-  if (isNaN(date)) {
-    return [];  // Return empty array if date is invalid
-  }
-  
-  while (date.getMonth() === month) {
-    if (date.getDay() === 0) {
-      sundays.push(new Date(date));
+  // Iterate through the days of the month to find all Sundays
+  var currentDate = new Date(firstDay);
+  while (currentDate.getMonth() === month) {
+    if (currentDate.getDay() === 0) { // 0 represents Sunday
+      serviceDates.push(Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'MM/dd'));
     }
-    date.setDate(date.getDate() + 1);
+    currentDate.setDate(currentDate.getDate() + 1);
   }
-  return sundays;
+  return serviceDates;
 }
 
 function testForm() {
@@ -176,6 +179,7 @@ function testForm() {
   createNewFormForMonth(planMonth, planYear, planMonthName);
 }
 
+//TODO: Include metadata processing in this function for modularity
 function createNewFormForMonth(month, year, monthName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var metadataSheet = ss.getSheetByName("Form Metadata") || ss.insertSheet("Form Metadata");
@@ -214,13 +218,9 @@ function createNewFormForMonth(month, year, monthName) {
   // Update the dropdown with real names
   updateFormDropdown();
 
-  // Add the Sunday dates to the form for unavailable dates selection
-  var sundayDates = getSundaysOfMonth(year, month);
-  var dateChoices = sundayDates.map(d => {
-    var mm = (d.getMonth() + 1).toString().padStart(2, '0');
-    var dd = d.getDate().toString().padStart(2, '0');
-    return `${mm}/${dd}`;
-  });
+  // Add the service dates to the form for unavailable dates selection
+  var serviceDates = getServiceDates(year, month);
+  var dateChoices = serviceDates;
 
   const availMC = form.addCheckboxItem();
   availMC.setTitle(formDatesHeader)
@@ -303,10 +303,9 @@ function setupAvailability(sheetName, year, month) {
   }
 
   // Get next month's Sundays dynamically
-  var sundays = getSundaysOfMonth(year, month);
+  var serviceDates = getServiceDates(year, month);
 
-  // Add the header row (SUNDAY dates)
-  var headerRow = ["SUNDAYS"].concat(sundays);
+  var headerRow = ["Schedule"].concat(serviceDates);
   sheet.appendRow(headerRow); // Adding the header row to the sheet
 
   // Select the header row range and make it bold
@@ -319,7 +318,7 @@ function setupAvailability(sheetName, year, month) {
   // Add each role with empty cells under each Sunday
   roles.forEach(function (role) {
     var roleRow = [role];
-    sundays.forEach(function () {
+    serviceDates.forEach(function () {
       roleRow.push(""); // Adding empty cells for each Sunday
     });
     sheet.appendRow(roleRow); // Add the row for the role
@@ -358,8 +357,8 @@ function setupAvailability(sheetName, year, month) {
   });
 }
 
-function clearUnvailableDates() {
-  // Open the spreadsheet by its ID
+function clearByHeader(header) {
+    // Open the spreadsheet by its ID
   var ss = SpreadsheetApp.openById(databaseFileId);
   
   // Access the "Ministry Members" sheet
@@ -376,11 +375,11 @@ function clearUnvailableDates() {
   // Get the values in the first row to find the "Not Available Dates" column
   var headers = dataRange.getValues()[0];
   
-  // Find the index of the "Not Available Dates" column
-  var notAvailableDatesColIndex = headers.indexOf("Unavailable Dates") + 1; // +1 to convert to 1-based index
+  // Find the index of the provided header column
+  var colIndex = headers.indexOf(header) + 1; // +1 to convert to 1-based index
   
-  if (notAvailableDatesColIndex === 0) {
-    Logger.log('"Unavailable Dates" column not found.');
+  if (colIndex === 0) {
+    Logger.log(header + ' column not found.');
     return;
   }
   
@@ -391,49 +390,10 @@ function clearUnvailableDates() {
     return;
   }
   
-  // Clear the contents of the "Not Available Dates" column, starting from row 2
-  sheet.getRange(2, notAvailableDatesColIndex, lastRow - 1).clearContent();
+  // Clear the contents of the column, starting from row 2
+  sheet.getRange(2, colIndex, lastRow - 1).clearContent();
   
-  Logger.log('"Unavailable Dates" column cleared.');
-}
-
-function clearTimesWilling() {
-  // Open the spreadsheet by its ID
-  var ss = SpreadsheetApp.openById(databaseFileId);
-  
-  // Access the "Ministry Members" sheet
-  var sheet = ss.getSheetByName(ministrySheetName);
-  
-  if (!sheet) {
-    Logger.log("Sheet not found: " + ministrySheetName);
-    return;
-  }
-  
-  // Get the data range of the sheet
-  var dataRange = sheet.getDataRange();
-  
-  // Get the values in the first row to find the "Not Available Dates" column
-  var headers = dataRange.getValues()[0];
-  
-  // Find the index of the "Not Available Dates" column
-  var timesWillingColIndex = headers.indexOf("Times Willing to Serve") + 1; // +1 to convert to 1-based index
-  
-  if (timesWillingColIndex === 0) {
-    Logger.log('"Times Willing to Serve" column not found.');
-    return;
-  }
-  
-  // Determine the range to clear: from row 2 to the last row in the identified column
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    Logger.log("No data to clear.");
-    return;
-  }
-  
-  // Clear the contents of the "Not Available Dates" column, starting from row 2
-  sheet.getRange(2, timesWillingColIndex, lastRow - 1).clearContent();
-  
-  Logger.log('"Times Willing to Serve" column cleared.');
+  Logger.log(header + ' column cleared.');
 }
 
 function monthlySetup() {
@@ -463,8 +423,10 @@ function monthlySetup() {
   var newTabName = `${planMonthName} Availability`;
   var deleteTabName = `${oldMonthName} Availability`;
   setupAvailability(newTabName, planYear, planMonth);
-  clearUnvailableDates();
-  clearTimesWilling();
+
+  clearByHeader(sheetsTimesHeader);
+  clearByHeader(sheetsDatesHeader);
+  clearByHeader(sheetsCommentsHeader);
 
   if (!ss.getSheetByName(newTabName)) {
     ss.insertSheet(newTabName);
@@ -566,10 +528,8 @@ function updateAvailability() {
   }
 
   // Define the Sundays of the next month
-  var sundays = getSundaysOfMonth(planYear, planMonth);
-  var dateHeaders = sundays.map(function(date) {
-    return Utilities.formatDate(date, Session.getScriptTimeZone(), 'MM/dd');
-  });
+  var serviceDates = getServiceDates(planYear, planMonth);
+  var dateHeaders = serviceDates;
 
   // Initialize the availability object
   var availability = {};
