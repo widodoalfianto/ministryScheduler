@@ -23,6 +23,8 @@ var formTimesHeader = 'How many times are you willing to serve this month?';
 var formDatesHeader = 'Which days are you NOT available?';
 var formCommentsHeader = 'Comments(optional)';
 
+var headerRowIndex = 13;
+
 var sheetsNameHeader = 'Name';
 var sheetsRolesHeader = 'Roles';
 var sheetsTimesHeader = 'Times Willing to Serve';
@@ -47,7 +49,23 @@ function updateDatabase(e) {
     var name = responses[formNameHeader];
     // var roles = responses['Select Your Roles'];
     var timesWilling = responses[formTimesHeader];
-    var unavailableDates = responses[formDatesHeader];
+    var unavailableDates = responses[formDatesHeader]
+      ? responses[formDatesHeader].map(function(dateStr) {
+      // Remove " - Corporate Prayer" if it exists
+      var cleanStr = dateStr.replace(' - Corporate Prayer', '').trim();
+
+      // If it's not a Corporate Prayer date, format to MM/dd
+      var date = new Date(cleanStr);
+      if (!isNaN(date.getTime())) {
+        var mm = ('0' + (date.getMonth() + 1)).slice(-2);
+        var dd = ('0' + date.getDate()).slice(-2);
+        return mm + '/' + dd;
+      }
+
+      // Fallback for unparseable or intentionally excluded strings
+      return cleanStr;
+    })
+  : [];
     var comments = responses[formCommentsHeader];
 
     // Log extracted values for debugging
@@ -519,7 +537,6 @@ function updateAvailability() {
     return;
   }
 
-  var headerRowIndex = 13;
   var databaseData = databaseSheet.getDataRange().getValues();
 
   if (!databaseData.length) {
@@ -527,7 +544,7 @@ function updateAvailability() {
     return;
   }
 
-  // Define the Sundays of the next month
+  // Define the service days
   var serviceDates = getServiceDates(planYear, planMonth);
   var dateHeaders = serviceDates;
 
@@ -542,13 +559,25 @@ function updateAvailability() {
   for (var i = 1; i < databaseData.length; i++) {
     var row = databaseData[i];
     var name = row[0] ? row[0].trim() : "";
-    var roles = row[1] ? row[1].toString().split(",").map(function(role) { return role.trim().toUpperCase(); }) : [];
+    var roles = row[1]
+      ? row[1].toString().split(",").map(function(role) {
+          return role.trim().toUpperCase();
+        })
+      : [];
     var timesWilling = row[2] ? row[2].toString().trim() : "";
-    var unavailableDates = row[3] ? row[3].toString().split(',').map(function(dateStr) {
-      // Convert date string to 'MM/dd' format
-      var date = new Date(dateStr);
-      return Utilities.formatDate(date, Session.getScriptTimeZone(), 'MM/dd');
-    }) : [];
+    var unavailableDates = row[3]
+      ? row[3].toString().split(",").map(function(dateStr) {
+      var parsedDate = new Date(dateStr.trim());
+      if (!isNaN(parsedDate.getTime())) {
+        var mm = ('0' + (parsedDate.getMonth() + 1)).slice(-2);
+        var dd = ('0' + parsedDate.getDate()).slice(-2);
+        return mm + '/' + dd;
+      } else {
+        // Fallback: just take the first 5 characters (e.g., "MM/dd") if parse fails
+        return dateStr.trim().substring(0, 5);
+      }
+    })
+  : [];
 
     if (!name || !roles.length) continue; // Skip rows with missing name or roles
 
@@ -558,20 +587,13 @@ function updateAvailability() {
       name = nameParts[0] + " " + nameParts[1].charAt(0).toUpperCase() + ".";
     }
 
-    // If "Times Willing to Serve" is blank, mark unavailable for all dates
-    var isUnavailableAllMonth = timesWilling === "";
+  // If "Times Willing to Serve" is blank, mark unavailable for all dates
+  var isUnavailableAllMonth = timesWilling === "";
 
-    roles.forEach(function(role) {
-      if (!availability[role]) availability[role] = {};
-      dateHeaders.forEach(function(date) {
-        if (!availability[role][date]) availability[role][date] = [];
-        // Add name if not marked unavailable for all dates and not in unavailableDates
-        if (!isUnavailableAllMonth && !unavailableDates.includes(date)) {
-          availability[role][date].push(name);
-        }
-      });
-    });
-  }
+  // Clear the old values from the matrix (excluding headers)
+  var numRoles = roleOrder.length;
+  var clearRange = matrixSheet.getRange(headerRowIndex, 2, numRoles, dateHeaders.length);
+  clearRange.clearContent();
 
   // Update the availability matrix in the sheet
   var roleRowIndex = headerRowIndex;
@@ -581,6 +603,46 @@ function updateAvailability() {
       var namesRow = dateHeaders.map(function(date) {
         return roleData[date] ? roleData[date].join("\n") : "";
       });
+      var range = matrixSheet.getRange(roleRowIndex, 2, 1, namesRow.length);
+      range.setValues([namesRow]);
+      range.setWrap(false); // Disable text wrapping for the range
+      roleRowIndex++;
+    }
+  });
+
+  roles.forEach(function(role) {
+    if (!availability[role]) availability[role] = {};
+    dateHeaders.forEach(function(dateHeader) {
+      // Extract 'MM/dd' from the date header
+      var date = dateHeader.substring(0, 5).trim();
+      if (!availability[role][date]) availability[role][date] = [];
+      // Add name if not marked unavailable for all dates and not in unavailableDates
+      if (!isUnavailableAllMonth && !unavailableDates.includes(date)) {
+        availability[role][date].push(name);
+      }
+    });
+  });
+  }
+
+  // Clear the old values from the matrix (excluding headers)
+  var numRoles = roleOrder.length;
+  var clearRange = matrixSheet.getRange(headerRowIndex, 2, numRoles, dateHeaders.length);
+  clearRange.clearContent();
+
+  // Update the availability matrix in the sheet
+  var roleRowIndex = headerRowIndex;
+  roleOrder.forEach(function(role) {
+    var roleData = availability[role];
+    if (roleData) {
+      var namesRow = dateHeaders.map(function(dateHeader) {
+        // Remove " - Corporate Prayer" from dateHeader to match the availability object
+        var date = dateHeader.split(' -')[0].trim();
+
+        // Return names for the role and date, if available
+        return roleData[date] ? roleData[date].join("\n") : "";
+      });
+      
+      // Set values in the sheet
       var range = matrixSheet.getRange(roleRowIndex, 2, 1, namesRow.length);
       range.setValues([namesRow]);
       range.setWrap(false); // Disable text wrapping for the range
