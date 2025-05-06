@@ -18,9 +18,10 @@
 var databaseFileId = "1cTlyG3m3i3OYZU7X2LYPJ03TUMKkFVakSIbhhVVH1mE"; // Database file ID
 var ministrySheetName = "Ministry Members"; // Sheet name for ministry members
 
+var formsFolderId = '1RMITTfCVaYzc0RBBtF0caE8RI5yeq57d'
 var formNameHeader = 'Select your name';
 var formTimesHeader = 'How many times are you willing to serve this month?';
-var formDatesHeader = 'Which days are you NOT available?';
+var formDatesHeader = 'Which days are you NOT available? If re-submitting, please re-submit this section also';
 var formCommentsHeader = 'Comments(optional)';
 
 var headerRowIndex = 13;
@@ -265,6 +266,10 @@ function createNewFormForMonth(month, year, monthName) {
 
   // Send email
   MailApp.sendEmail(recipientEmail, emailSubject, emailBody);
+
+  var file = DriveApp.getFileById(form.getId());
+  var targetFolder = DriveApp.getFolderById(formsFolderId);
+  file.moveTo(targetFolder);
 }
 
 function updateFormDropdown() {
